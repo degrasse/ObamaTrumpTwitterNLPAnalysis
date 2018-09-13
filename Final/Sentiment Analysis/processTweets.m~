@@ -1,0 +1,121 @@
+classdef processTweets
+    %PROCESSTWEETS provides utility methods to process tweets in structure
+    %arrays generated from JSON
+    
+    methods (Static)
+        
+        
+         function [tweets,varargout] = extract(S)
+            if length(S) == 1
+                statuses = S{1}.statuses;
+            else
+                statuses = S;
+            end
+            
+            % iterate over the returned result to extract details
+            
+            tweet_texts = cell(length(statuses),1);
+            hashtags = cell(length(statuses),1);
+            mentions = cell(length(statuses),1);
+    
+            for i=1:length(statuses)
+                
+                tweet_texts{i} = regexprep(statuses{i}.text,'\r\n|\n|\r',' ');
+               
+               
+                if ~isempty(statuses{i}.entities.hashtags)
+                    for j = 1:length(statuses{i}.entities.hashtags)
+                        hashtags{i,j} = statuses{i}.entities.hashtags{j}.text;
+                    end
+                end
+            
+                if ~isempty(statuses{i}.entities.user_mentions)
+                    for k = 1:length(statuses{i}.entities.user_mentions)
+                        mentions{i,k} = statuses{i}.entities.user_mentions{k}.screen_name;
+                    end
+                end
+                tokens = textscan(tweet_texts{i},'%s','Delimiter',' ');
+                tokens = tokens{1}(:);
+                
+            end
+            
+            tweets = table(tweet_texts,hashtags,mentions,...
+                'VariableNames',{'Tweet','Hashtags','Mentions'});
+            varargout = {tweet_idx};
+        end
+        
+        
+        
+        
+        
+        
+        
+        
+
+        
+        function [tokenized,varargout] = tokenize(tweets,stopwordsURL)
+            % load stop words data
+            stopWords = urlread(stopwordsURL);
+            stopWords = textscan(stopWords,'%s','Delimiter',',');
+            stopWords = stopWords{1}(:);
+            
+            % remove special characters in tokenization
+            delimiters = {' ','$','/','.','-',':','&','*',...
+                            '+','=','[',']','?','!','(',')','{','}',',',...
+                            '"','>','_','<',';','%'};
+            
+            % iterate over tweets
+            tokenized = cell(size(tweets.Tweet));
+            word_list = {};
+            
+            for i = 1:length(tweets.Tweet)
+                % lower case 
+                tweet = lower(tweets.Tweet{i});
+                % remove numbers
+                tweet = regexprep(tweet, '[0-9]+','');
+                % remove URLs
+                tweet = regexprep(tweet,'(http|https)://[^\s]*','');
+                % check if tweet is still valid
+                if ~isempty(tweet)
+                        % tokenize the content - returns a nested cell array
+                        tokens = textscan(tweet,'%s','Delimiter',delimiters);
+                        tokens = tokens{1}(:);
+                        % remove unicode characters
+                        tokens = regexprep(tokens,'\\u','');
+                        % remove empty elements
+                        tokens = tokens(~cellfun('isempty',tokens));
+                        % remove stopwords 
+                        tokens = tokens(~ismember(tokens, stopWords));
+                        % remove one character words
+                        tokens = tokens(cellfun('length',tokens) > 1);
+                        % store tokens
+                        tokenized{i,1} = tokens;
+                        word_list = [word_list;tokens];
+                end
+            end
+            varargout = {word_list};
+        end
+        
+        function scores = scoreSentiment(tweets,scoreFile,stopwordsURL)
+            % load AFINN data
+            AFINN = readtable(scoreFile,'Delimiter','\t','ReadVariableNames',0);
+            AFINN.Properties.VariableNames = {'Term','Score'};
+            % tokenize tweets
+            tokenized = processTweets.tokenize(tweets,stopwordsURL);
+            
+            % compute sentiment scores
+            scores = zeros(size(tokenized));
+            for i = 1:length(tokenized)
+                % if the tweet is commercial or in Hindi, skip it
+                %if ~(tweets.isCommercial(i) || tweets.isHindi(i))
+                    % compute the sentiment score
+                    scores(i) = sum(AFINN.Score(ismember(AFINN.Term,tokenized{i})));
+               % end
+            end
+        end
+        
+     
+    end
+    
+end
+

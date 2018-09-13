@@ -1,0 +1,13 @@
+
+
+tweetsO = obamatweets2;
+tweetsT = Trumptweets;
+
+% compute the sentiment scores with |scoreSentiment|
+scoreFile = 'scoreFile.txt';
+
+stopwordsURL ='http://www.textfixer.com/resources/common-english-words.txt';
+
+
+sentimentsObama= processTweets.scoreSentiment(tweetsO,scoreFile,stopwordsURL);
+s
